@@ -1,0 +1,44 @@
+version: '2'
+
+services:
+    web:
+        image: medshake-api-web:latest
+        ports:
+            - "80:80"
+        volumes:
+            - ~/api/log:/var/log
+            - ~/api/work:/app/MedShakeEHR-base/work
+        links:
+            - db:db
+        environment:
+            # API_* Env Variable passthru
+            - API_SERVER_NAME=${API_SERVER_NAME}
+            - API_SERVER_ALIAS=${API_SERVER_ALIAS}
+            - API_DBMS_NAME=${API_DBMS_NAME}
+            - API_DBMS_ROOT_PASSWORD=${API_DBMS_ROOT_PASSWORD}
+            - API_DBMS_USER_NAME=${API_DBMS_USER_NAME}
+            - API_DBMS_USER_PASSWORD=${API_DBMS_USER_PASSWORD}
+            - API_DBMS_VAR=${API_DBMS_VAR}
+            - API_FINGERPRINT=${API_FINGERPRINT}
+    db:
+        image: medshake-api-db:latest
+        volumes:
+            - ~/api/data:/var/lib/mysql
+#        ports:
+#            - "3306:3306"
+        command:
+            - --character-set-server=utf8mb4
+            - --collation-server=utf8mb4_unicode_ci
+            - --skip-character-set-client-handshake
+        environment:
+            - MYSQL_ROOT_PASSWORD=${API_DBMS_ROOT_PASSWORD}
+            - MYSQL_DATABASE=${API_DBMS_NAME}
+            - MYSQL_USER=${API_DBMS_USER_NAME}
+            - MYSQL_PASSWORD=${API_DBMS_USER_PASSWORD}
+
+    myadmin:
+        image: phpmyadmin/phpmyadmin
+        ports:
+            - "8080:80"
+        links:
+            - db:db

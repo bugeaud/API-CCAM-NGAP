@@ -29,10 +29,10 @@
 
 sqlServeur:            'db'
 sqlUser:               'root'
-sqlPass:               'KedHKAkhSl77VJcbxhxi'
-sqlBaseCcam:           'APICCAMNGAP'
-sqlBaseNgap:           'APICCAMNGAP'
-sqlBaseConfig:         'APICCAMNGAP'
+sqlPass:               '${API_DBMS_ROOT_PASSWORD}'
+sqlBaseCcam:           '${API_DBMS_NAME}'
+sqlBaseNgap:           '${API_DBMS_NAME}'
+sqlBaseConfig:         '${API_DBMS_NAME}'
 
 sqlBaseCcamRotation:
   2018-10-01: ''

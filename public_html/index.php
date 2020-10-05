@@ -30,6 +30,8 @@
 ini_set('display_errors', 0);
 setlocale(LC_ALL, "fr_FR.UTF-8");
 
+use Symfony\Component\Yaml\Yaml;
+
 // Composer class auto-upload
 require '../vendor/autoload.php';
 
@@ -41,7 +43,8 @@ spl_autoload_register(function ($class) {
 });
 
 // chargement des paramètres de configuration
-$p['config']=Spyc::YAMLLoad('../config/config.yml');
+//$p['config']=Spyc::YAMLLoad('../config/config.yml');
+$p['config'] = Yaml::parseFile('../config/config.yml');
 
 // rotation des bases CCAM à dates prévues
 if(isset($p['config']['sqlBaseCcamRotation']) and is_array($p['config']['sqlBaseCcamRotation'])) {
@@ -67,7 +70,8 @@ $mysqli=msSQL::sqlConnect();
 
 // Router
 $router = new AltoRouter();
-$routes=Spyc::YAMLLoad('../config/routes.yml');
+//$routes=Spyc::YAMLLoad('../config/routes.yml');
+$routes = Yaml::parseFile('../config/routes.yml');
 $router->addRoutes($routes);
 //$router->setBasePath($p['config']['urlHostSuffixe']);
 $match = $router->match();
@@ -129,10 +133,10 @@ if ($match and is_file('../controlers/'.$match['target'].'.php')) {
 
     $twigEnvironment['cache']=false;
     $twigEnvironment['autoescape']=false;
-    $loader = new Twig_Loader_Filesystem('../templates/');
-    $twig = new Twig_Environment($loader, $twigEnvironment);
-    $twig->getExtension('Twig_Extension_Core')->setDateFormat('d/m/Y', '%d days');
-    $twig->getExtension('Twig_Extension_Core')->setTimezone('Europe/Paris');
+    $loader = new \Twig\Loader\FilesystemLoader('../templates/');
+    $twig = new \Twig\Environment($loader, $twigEnvironment);
+    $twig->getExtension('\Twig\Extension\CoreExtension')->setDateFormat('d/m/Y', '%d days');
+    $twig->getExtension('\Twig\Extension\CoreExtension')->setTimezone('Europe/Paris');
     echo $twig->render($template.'.html.twig', $p);
 
   }

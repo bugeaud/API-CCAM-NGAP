@@ -1,0 +1,20 @@
+DROP PROCEDURE IF EXISTS dropCCAMTables;
+
+DELIMITER //
+
+CREATE PROCEDURE dropCCAMTables
+(IN tschema VARCHAR(64))
+BEGIN
+
+ SELECT * FROM (
+  SELECT CONCAT('DROP TABLE ', tschema, '.', GROUP_CONCAT(table_name) , ';')
+  FROM INFORMATION_SCHEMA.TABLES
+  WHERE table_name LIKE 'R_%' and table_schema = tschema
+ ) a INTO @dropCCAM;
+
+ PREPARE dropCCAMStatement FROM @dropCCAM;
+ EXECUTE dropCCAMStatement;
+ DEALLOCATE PREPARE dropCCAMStatement;
+
+END //
+DELIMITER ;

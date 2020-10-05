@@ -1,0 +1,113 @@
+# We will go for a Eoan waiting from Focal
+FROM ubuntu:eoan
+LABEL description="API-CCAM-NGAP Dockerized"
+LABEL maintainer="bugeaud@gmail.com"
+
+#FROM php:7.2-apache
+# Docker's php is realy a mess
+
+# Set some environement variables required
+ENV APP_PATH /app
+ENV APIPATH $APP_PATH/API-CCAM-NGAP
+ENV APIPUBLICPATH $APP_PATH/API-CCAM-NGAP/public_html
+
+# Create the APP directory and move to it
+ADD --chown=www-data:www-data . $APIPATH
+WORKDIR $APP_PATH
+
+# Check system is fresh and clean
+RUN apt update && apt --assume-yes upgrade
+
+# Set the timezone
+ENV TZ 'Europe/Paris'
+RUN echo $TZ > /etc/timezone && \
+	apt install --assume-yes apt-utils tzdata locales && \
+	rm /etc/localtime && \
+	ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && \
+	dpkg-reconfigure -f noninteractive tzdata && \
+	apt clean
+
+# Install PhP as apache's mod
+RUN apt --assume-yes install libapache2-mod-php
+
+# Install git for source code retrieval
+RUN apt-get install -y -qq git unzip php-zip
+
+# Disable strict host checking in order for git clone to ve able to go thru without a SSH identity
+#RUN ssh-keyscan github.com >> ~/.ssh/known_hosts
+#RUN echo "Host github.com\n\tStrictHostKeyChecking no\n" >> /etc/ssh/ssh_config
+
+WORKDIR $APP_PATH
+
+# Get & install PHP Composer
+# First install curl & git as it is required to fetch extensions 
+RUN apt --assume-yes install curl
+# Solution 1 : PHAR download
+#RUN curl -sf -L https://getcomposer.org/download/1.6.5/composer.phar \
+#	&& chmod 0774 /tmp/composer.phar \
+#	&& php /tmp/composer.phar install
+# Solution 2 : Setup script (Composer recommanded way)
+#RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+#RUN php -r "if (hash_file('sha384', 'composer-setup.php') === 'e0012edf3e80b6978849f5eff0d4b4e4c79ff1609dd1e613307e16318854d24ae64f26d17af3ef0bf7cfb710ca74755a') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;"
+#RUN php composer-setup.php
+#RUN php -r "unlink('composer-setup.php');"
+# Solution 3 : Use a composer binary from the latest composer image
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
+# Test the composer & set that root exec is fine as we are in a container
+# Let's suppress the warning we are using root as we are inside Docker
+ENV COMPOSER_ALLOW_SUPERUSER=1
+#RUN php composer.phar --version --no-interaction 
+RUN composer --version --no-interaction
+
+# Force use of HTTPS to avoid problem at SSH auth
+RUN composer config --global github-protocols https
+RUN git config --global url."https://github.com/".insteadOf git@github.com:
+
+# Fetch the PHP Extension installer for Docker
+RUN curl -sf -L -O https://github.com/docker-library/php/blob/master/docker-php-ext-install \
+	&& chmod 0774 docker-php-ext-install
+
+# Install some more PhP's dependencies
+#RUN apt --assume-yes install php-gd
+
+# Install the MedShakeEHR Base PhP's dependencies
+#RUN php composer.phar install -d $APIPATH
+RUN composer install --verbose -d $APIPATH
+
+# Check which .ini files are used
+RUN php --ini
+
+# Install npm
+RUN apt-get install -y -qq npm
+
+# Install bower
+RUN npm install --global bower
+
+# Allow bower to run under docker's root
+RUN echo '{ "allow_root": true }' > /root/.bowerrc
+
+# Make sure any bower module will be fixed toward wrong line end
+RUN git config --global core.autocrlf input
+
+WORKDIR $APIPUBLICPATH
+RUN bower install -V --config.cwd $APIPUBLICPATH
+#RUN bower install -V
+
+# Create the Apache 2 configuration for the MedShake EHR application
+COPY medshakeapi.conf /etc/apache2/sites-available/
+
+#Enable URL rewriting
+RUN a2enmod rewrite
+
+# Activate the application
+RUN a2dissite 000-default && a2ensite medshakeapi
+
+# Run Apache 2 as foreground
+WORKDIR $APP_PATH
+#CMD apachectl -D FOREGROUND
+COPY docker-api-web-apache2-foreground /usr/local/bin/
+CMD docker-api-web-apache2-foreground
+
+EXPOSE 80/tcp
+EXPOSE 443/tcp

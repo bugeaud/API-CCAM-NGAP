@@ -1,0 +1,52 @@
+# Let's start from a mariadb config
+FROM mariadb:latest
+
+ARG MYSQL_DATABASE=APICCAMNGAP
+
+LABEL description="MedShake API CCAM NGAP dockerized DB image"
+LABEL maintainer="bugeaud@gmail.com"
+
+# Set some environement variables required
+ENV APP_PATH /app
+ENV APIPATH $APP_PATH/API/
+
+# Create the APP directory and move to it
+ADD --chown=mysql:mysql . $APIPATH
+WORKDIR $APIPATH
+
+# Check system is fresh and clean
+RUN apt update && apt --assume-yes upgrade --option=Dpkg::Options::=--force-confdef
+
+# Install the connect engine
+RUN apt --assume-yes install mariadb-plugin-connect
+
+# Install curl & unzip for data access
+RUN apt --assume-yes install curl unzip
+
+# Fetch DBF files from Ameli
+RUN curl -s https://www.ameli.fr/accueil-de-la-ccam/telechargement/fichiers-informatiques-nouvelle-structure/index.php | \
+grep -Eoi '<a [^>]+>' |  \
+grep -Po 'href="([^\"]+)"' | \
+grep -Po '[^\"]+_DBF_PART[^\"]+\.zip' | sed 's/^/https\:\/\/www.ameli.fr/' | xargs -n 1 curl -s -O
+
+# Expand the archives
+RUN unzip \*.zip
+
+#Generate the table create scripts
+RUN ls *.dbf | sed 's/\(.*\)\.dbf/create table \1 engine=CONNECT table_type=DBF CHARSET=cp850 file_name=\"\/docker-entrypoint-initdb.d\/&\" option_list="Accept=1";/' > api-ccam-create.sql
+
+# Add any .cnf file to MariaDB configuration
+#ADD --chown=mysql:mysql config/*.cnf /etc/mysql/mariadb.conf.d/
+
+# Create the database
+RUN echo "CREATE DATABASE IF NOT EXISTS $MYSQL_DATABASE CHARACTER SET utf8 COLLATE utf8_bin" > /docker-entrypoint-initdb.d/00-create.sql
+
+# Add the API config tables
+ADD --chown=mysql:mysql api_config.sql  /docker-entrypoint-initdb.d/01-api-config.sql
+
+# Add the CCAM tables
+RUN cp api-ccam-create.sql /docker-entrypoint-initdb.d/02-api-ccam.sql
+RUN cp *.dbf /docker-entrypoint-initdb.d/
+
+# Add the API NGAP tables
+ADD --chown=mysql:mysql api_ngap.sql /docker-entrypoint-initdb.d/03-api-ngap.sql
